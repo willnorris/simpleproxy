@@ -28,12 +28,20 @@ func main() {
 		log.Fatalf("error parsing TARGET_URL: %v", err)
 	}
 
+	forceSSL := os.Getenv("FORCE_SSL") == "1"
+
 	rp := httputil.NewSingleHostReverseProxy(target)
 	proxy := func(w http.ResponseWriter, r *http.Request) {
+		if forceSSL && r.Header.Get("X-Forwarded-Proto") == "http" {
+			r.URL.Scheme = "https"
+			r.URL.Host = r.Host
+			http.Redirect(w, r, r.URL.String(), http.StatusMovedPermanently)
+			return
+		}
 		r.Host = target.Host
 		rp.ServeHTTP(w, r)
 	}
 
-	log.Printf("Listening on port 8080; Proxying to %v", target.String())
+	log.Printf("Listening on port 8080; ForceSSL: %t, Proxying to %v", forceSSL, target.String())
 	log.Fatal(http.ListenAndServe(":8080", http.HandlerFunc(proxy)))
 }
